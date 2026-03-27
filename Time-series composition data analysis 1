@@ -1,0 +1,115 @@
+# =================================================================
+# ITAGAKI-SYSTEM V16.0: TIME-SERIES TREND PILOT (n >= 3)
+# -----------------------------------------------------------------
+# Methodology: Monotonicity-Anchored Absolute Basis Recovery
+# Purpose: Screening for "True Absolute Growth" Hypothesis
+# 
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License
+# =================================================================
+
+# --- 1. USER CONFIGURATION ---
+# Row indices for time series (e.g., 1st to 4th rows)
+selected_time_indices <- c(1, 2, 3, 4) 
+
+# Zero handling / Abundance threshold (Default: 0.000001)
+abundance_threshold <- 0.000001 
+
+# --- 2. DATA PREPARATION ---
+# Ensure "Dataset" object is a matrix or data frame
+if(!exists("Dataset")) {
+  stop("Critical Error: 'Dataset' object not found in environment.")
+}
+raw_data <- as.matrix(Dataset)[selected_time_indices, ]
+n_tp <- nrow(raw_data)
+
+if(n_tp < 3) stop("At least 3 time points are required for trend analysis.")
+
+# Filter components by threshold
+valid_taxa_mask <- apply(raw_data, 2, function(x) all(x >= abundance_threshold))
+if(sum(valid_taxa_mask) < 2) stop("Too few components passed the abundance threshold.")
+
+d_m <- raw_data[, valid_taxa_mask, drop = FALSE]
+taxa_names <- colnames(d_m)
+if(is.null(taxa_names)) taxa_names <- paste0("Comp_", 1:ncol(d_m))
+
+# Estimate Physical Noise Floor (Poisson Limit)
+eff_lib <- 1 / (mean(apply(d_m, 2, min)) + 1e-20)
+
+# --- 3. DYNAMIC ANCHOR DISCOVERY ---
+get_smoothness <- function(P) {
+  p_count <- ncol(P)
+  scores <- numeric(p_count)
+  for(j in 1:p_count) {
+    sf_traj <- 1 / (P[, j] + 1e-20)
+    # Jitter of the log-scaling factor
+    scores[j] <- var(diff(log(sf_traj)))
+  }
+  return(scores)
+}
+
+smooth_scores <- get_smoothness(d_m)
+best_anchor_idx <- which.min(smooth_scores)
+anchor_name <- taxa_names[best_anchor_idx]
+
+# --- 4. ABSOLUTE BASIS RECONSTRUCTION ---
+est_sf <- 1 / (d_m[, best_anchor_idx] + 1e-20)
+abs_recovery <- sweep(d_m, 1, est_sf, "*")
+
+# --- 5. THE TRIPLE-GATE VALIDATION (SKEPTICAL ENGINE) ---
+
+# GATE 1: Monotonicity (1 < 2 < 3 < ... < n)
+is_monotonic_up <- apply(abs_recovery, 2, function(x) all(diff(x) > 0))
+
+# GATE 2: Signal-to-Noise Ratio (Poisson Gate)
+total_delta <- abs_recovery[n_tp, ] - abs_recovery[1, ]
+poisson_err <- sqrt(1 / (colMeans(d_m) * eff_lib + 1e-20))
+snr_pass <- total_delta > (3 * poisson_err)
+
+# GATE 3: LOO (Leave-One-Out) Robustness
+loo_trend_check <- apply(abs_recovery, 2, function(x) {
+  check_results <- logical(length(x))
+  for(i in 1:length(x)) {
+    x_sub <- x[-i]
+    check_results[i] <- all(diff(x_sub) > 0)
+  }
+  return(all(check_results)) 
+})
+
+# --- 6. FINAL HYPOTHESIS EXTRACTION ---
+growth_candidates <- which(is_monotonic_up & snr_pass & loo_trend_check)
+
+# --- 7. ANALYTICAL REPORT ---
+cat("\n", rep("=", 58), "\n", sep="")
+cat("      ITAGAKI-SYSTEM V16.0: TIME-SERIES PILOT REPORT      \n")
+cat(rep("=", 58), "\n", sep="")
+cat(sprintf("Selected Time Indices : %s\n", paste(selected_time_indices, collapse=", ")))
+cat(sprintf("Abundance Threshold   : %g\n", abundance_threshold))
+cat(sprintf("Dynamic Anchor        : %s (Stability: %.6f)\n", anchor_name, min(smooth_scores)))
+cat(sprintf("Analyzed Components   : %d\n", ncol(d_m)))
+cat(rep("-", 58), "\n", sep="")
+
+if(length(growth_candidates) > 0) {
+  cat(sprintf("DETECTED GROWTH HYPOTHESES: %d components\n\n", length(growth_candidates)))
+  report <- data.frame(
+    Component = taxa_names[growth_candidates],
+    Fold_Change = round(abs_recovery[n_tp, growth_candidates] / abs_recovery[1, growth_candidates], 2),
+    SNR = round(total_delta[growth_candidates] / poisson_err[growth_candidates], 2)
+  )
+  print(report[order(-report$Fold_Change), ], row.names = FALSE)
+} else {
+  cat("RESULT: No reliable growth trends identified.\n")
+  cat("REASON: Signal below noise floor or trend is not robust.\n")
+}
+cat(rep("=", 58), "\n", sep="")
+
+# --- 8. VISUALIZATION ---
+if(length(growth_candidates) > 0) {
+  target_viz <- growth_candidates[1:min(5, length(growth_candidates))]
+  matplot(abs_recovery[, target_viz, drop=F], type="b", pch=16, lwd=2, lty=1,
+          main="Verified Absolute Growth Trends (V16.0 Pilot)",
+          xlab="Time Point Index", ylab="Estimated Absolute Mass")
+  grid()
+  legend("topleft", legend=taxa_names[target_viz], col=1:length(target_viz), pch=16, bty="n")
+}
