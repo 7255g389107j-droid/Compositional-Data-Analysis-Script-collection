@@ -1,0 +1,242 @@
+# =================================================================
+# G-TRACE Professional: Integrated Geometric Stability Analysis
+# Framework: Ohta et al. (2011) | Full Features & Professional Report
+# This is merely a visualization of "geometric discrepancies" and does not explain causal relationships or biological significance.
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# =================================================================
+
+# --- 1. User Configuration ---
+# Rows: Samples, Columns: Components.
+# Choose your reference sample index (e.g., control group, time-zero)
+target_baseline_idx <- 1 
+
+# Minimum value threshold for components to be included in analysis
+# Higher values increase numerical stability but may exclude rare components
+compositional_threshold <- 0.00001
+
+# --- 2. Data Processing & CLR Transformation ---
+ds_input <- as.matrix(Dataset)
+
+# Filtering: Maintain strict threshold for numerical stability
+valid_mask <- apply(ds_input, 2, function(x) all(x >= compositional_threshold))
+if(sum(valid_mask) < 2) stop("Critical Error: Insufficient components for ratio analysis.")
+
+data_clean <- ds_input[, valid_mask]
+log_data <- log(data_clean)
+clr_data <- sweep(log_data, 1, rowMeans(log_data), "-")
+
+# --- 3. Baseline Validation & Reliability Logic ---
+# Evaluate if the selected baseline is representative using Aitchison distance
+lrmsd_all <- rowMeans(sweep(clr_data, 2, colMeans(clr_data), "-")^2)
+baseline_reliability <- exp(-lrmsd_all[target_baseline_idx])
+
+# Identify the most representative sample (closest to the geometric mean)
+ideal_baseline_idx <- which.min(lrmsd_all)
+
+# --- 4. Trajectory Analysis (Relative to Selected Baseline) ---
+# Delta-CLR: Measuring geometric shift from the specific anchor
+g_trace <- sweep(clr_data, 2, clr_data[target_baseline_idx, ], "-")
+
+# Geometric Stability Index (GSI)
+lrmsd <- rowMeans(g_trace^2)
+gsi_scores <- exp(-lrmsd)
+
+# Anomaly Detection (Robust MAD-based on LRMSD)
+limit_val <- median(lrmsd) + 3 * mad(lrmsd)
+anomalies <- which(lrmsd > limit_val)
+
+# --- 5. Professional Analytical Report (English - Full Version) ---
+cat("\n", rep("=", 60), "\n", sep="")
+cat(" G-TRACE: GEOMETRIC STABILITY ANALYSIS REPORT\n")
+cat(rep("=", 60), "\n", sep="")
+cat(sprintf("Selected Baseline    : Sample [%d]\n", target_baseline_idx))
+cat(sprintf("Baseline Reliability : %.4f (Higher is better)\n", baseline_reliability))
+cat(sprintf("System Integrity     : %.4f (Mean GSI)\n", mean(gsi_scores)))
+cat(sprintf("Analyzed Components  : %d\n", ncol(data_clean)))
+cat(sprintf("Detection Threshold  : %g\n", compositional_threshold))
+cat(sprintf("Detected Anomalies   : %d samples\n", length(anomalies)))
+
+# Reliability Warnings & Pro-Tips
+if(baseline_reliability < 0.5) {
+  cat("!! WARNING: Selected baseline has low representativeness (Outlier potential).\n")
+}
+if(target_baseline_idx != ideal_baseline_idx) {
+  cat(sprintf("Pro-Tip: Sample [%d] is geometrically more central/representative.\n", ideal_baseline_idx))
+}
+
+# Component Stability Ranking
+comp_variance <- apply(clr_data, 2, var)
+final_order <- order(comp_variance)
+
+cat("\n[COMPONENT STABILITY RANKING (Invariance)]\n")
+cat(sprintf("%-4s | %-25s | %-12s\n", "Rank", "Component", "CLR-Variance"))
+cat(paste(rep("-", 45), collapse = ""), "\n")
+for(i in 1:length(final_order)) {
+  idx <- final_order[i]
+  cat(sprintf("%-4d | %-25s | %-12.6f\n", 
+              i, colnames(data_clean)[idx], comp_variance[idx]))
+}
+
+# Sample Stability Trajectory
+cat("\n[SAMPLE STABILITY TRAJECTORY]\n")
+cat(sprintf("%-8s | %-10s | %-10s\n", "Sample", "GSI Score", "Status"))
+cat(paste(rep("-", 32), collapse = ""), "\n")
+for(s in 1:nrow(clr_data)) {
+  status <- if(s %in% anomalies) "!!! SHIFT !!!" else "Stable"
+  # Mark baseline sample in the list
+  if(s == target_baseline_idx) status <- "BASELINE"
+  cat(sprintf("%-8d | %-10.4f | %-10s\n", s, gsi_scores[s], status))
+}
+
+# Stability Confidence Index Interpretation
+stability_confidence <- mean(comp_variance) / min(comp_variance)
+cat(sprintf("\n[STABILITY CONFIDENCE INDEX: %.4f]\n", stability_confidence))
+if(stability_confidence > 5.0) {
+  cat("Result: HIGH CONFIDENCE. Strong invariant anchor identified.\n")
+} else if(stability_confidence < 2.0) {
+  cat("Result: LOW CONFIDENCE. System-wide fluctuation (No Anchor).\n")
+} else {
+  cat("Result: MODERATE CONFIDENCE. System structure is relatively stable.\n")
+}
+
+# --- 6. Professional Visualization ---
+layout(matrix(c(1, 2), 2, 1))
+par(mar = c(4, 4, 3, 2), mgp = c(2, 0.7, 0), bg = "#FDFDFD")
+
+# Plot A: System Stability Trajectory (GSI)
+plot(gsi_scores, type = "b", pch = 21, bg = "#34495E", col = "#2C3E50", lwd = 1.5,
+     main = "Geometric Stability Index (GSI) vs Baseline", 
+     ylab = "Stability Score (0-1)", xlab = "Sample Sequence", ylim = c(0, 1))
+# Mark the Baseline in Blue
+points(target_baseline_idx, gsi_scores[target_baseline_idx], col = "blue", cex = 2, lwd = 2) 
+# Mark Anomalies in Red
+if(length(anomalies) > 0) points(anomalies, gsi_scores[anomalies], col = "#E74C3C", cex = 1.5, lwd = 2)
+grid()
+
+# Plot B: Dynamics of Top Invariant Components
+top_n <- min(3, ncol(data_clean))
+viz_cols <- c("#27AE60", "#2980B9", "#8E44AD")
+matplot(g_trace[, final_order[1:top_n]], type = "o", lty = 1, pch = 16, col = viz_cols,
+        main = "Top Invariant Components (Relative Deviation)",
+        ylab = "Log-Ratio Shift", xlab = "Sample Sequence")
+abline(h = 0, lwd = 2, col = "#34495E", lty = 2)
+grid()
+legend("topright", legend = colnames(data_clean)[final_order[1:top_n]], 
+       col = viz_cols, pch = 16, bty = "n", cex = 0.8)
+
+# Volatile drivers
+volatile_order <- order(comp_variance, decreasing = TRUE)
+
+# --- 7. Volatile Components (System Drivers) ---
+cat("\n[VOLATILE SYSTEM DRIVERS (Highest Variance)]\n")
+volatile_n <- min(3, ncol(data_clean))
+for(i in 1:volatile_n) {
+  idx <- volatile_order[i]
+  cat(sprintf("Driver %d: %-20s (Var: %.6f)\n", 
+              i, colnames(data_clean)[idx], comp_variance[idx]))
+}
+
+cat("\n", rep("=", 60), "\n", sep="")
+cat(" END OF G-TRACE PROFESSIONAL REPORT\n")
+cat(rep("=", 60), "\n", sep="")
+
+
+# =================================================================
+# G-TRACE Trial: Mathematically Robust Geometric Stability
+# Framework: PCA-Projected Aitchison Geometry & Total Variation
+# The following information is for reference purposes only.
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# =================================================================
+
+
+# --- 1. Robust Pre-processing ---
+ds_input <- as.matrix(Dataset)
+# Numerical stability: Zero-imputation or strict filtering
+data_clean <- ds_input[, apply(ds_input, 2, function(x) all(x > 0))]
+log_data <- log(data_clean)
+clr_data <- sweep(log_data, 1, rowMeans(log_data), "-")
+
+# --- 2. Dimensionality Reduction (Handling Rank Deficiency) ---
+# CLR data always has a rank of at most P-1. 
+# We project to the first K components to focus on structural signal.
+pca_full <- prcomp(clr_data, center = TRUE, scale. = FALSE)
+# Criterion: Use components explaining 90% of variance, or max 5 for stability
+k_components <- min(which(cumsum(pca_full$sdev^2) / sum(pca_full$sdev^2) > 0.90), 5)
+projected_data <- pca_full$x[, 1:k_components]
+
+# --- 3. Multivariate Early Warning Signals (EWS) ---
+# window_size must provide enough degrees of freedom for the reduced space
+P_eff <- ncol(projected_data)
+window_size <- max(12, P_eff * 2) 
+
+n_windows <- nrow(projected_data) - window_size + 1
+ews_metrics <- data.frame(
+  Mid_Point = (window_size:nrow(projected_data)) - floor(window_size/2),
+  Total_Variation = rep(NA, n_windows),
+  Recovery_Rate = rep(NA, n_windows)
+)
+
+for(i in 1:n_windows) {
+  win_idx <- i:(i + window_size - 1)
+  W <- projected_data[win_idx, ]
+  
+  # Metric A: Total Variation (Trace of Covariance)
+  # Mathematically stable alternative to Determinant. Represents system "flickering".
+  ews_metrics$Total_Variation[i] <- sum(apply(W, 2, var))
+  
+  # Metric B: Multivariate Autocorrelation (VAR-1 Approximation)
+  # Measures "Critical Slowing Down" (CSD).
+  X_t <- W[-nrow(W), , drop=FALSE]
+  X_next <- W[-1, , drop=FALSE]
+  
+  # Solve X_{t+1} = B * X_t via OLS
+  # Pillai-like trace used as a proxy for systemic resilience loss
+  fit <- lm(X_next ~ X_t)
+  ews_metrics$Recovery_Rate[i] <- sum(diag(cov(fit$fitted.values))) / sum(diag(cov(X_next)))
+}
+
+# --- 4. Integrated Singularity Index (ISI) ---
+# Normalizing metrics to 0-1 scale for risk fusion
+norm_v <- (ews_metrics$Total_Variation - min(ews_metrics$Total_Variation)) / diff(range(ews_metrics$Total_Variation))
+norm_r <- (ews_metrics$Recovery_Rate - min(ews_metrics$Recovery_Rate)) / diff(range(ews_metrics$Recovery_Rate))
+ews_metrics$ISI_Score <- norm_v * norm_r
+
+# --- 5. Analytical Summary ---
+cat("\n", rep("=", 60), "\n", sep="")
+cat(" G-TRACE ULTRA: MATHEMATICAL INTEGRITY REPORT\n")
+cat(rep("=", 60), "\n")
+cat(sprintf("Input Components  : %d\n", ncol(clr_data)))
+cat(sprintf("Effective Rank    : %d (PCA Projection)\n", P_eff))
+cat(sprintf("Analysis Window   : %d samples\n", window_size))
+cat(sprintf("Singularity Risk  : %.4f (Max ISI)\n", max(ews_metrics$ISI_Score)))
+
+# Peak Risk Identification
+peak_sample <- ews_metrics$Mid_Point[which.max(ews_metrics$ISI_Score)]
+cat(sprintf("Critical Point    : Sample [%d]\n", peak_sample))
+cat(rep("=", 60), "\n")
+
+# --- 6. Visualization ---
+par(mfrow=c(2,1), mar=c(4,4,2,2))
+# Plot 1: System Flickering (Total Variation)
+plot(ews_metrics$Mid_Point, ews_metrics$Total_Variation, type="l", col="blue", lwd=2,
+     main="Systemic Variance (Total Variation)", ylab="Variance Sum", xlab="Sequence")
+# Plot 2: Integrated Singularity Index
+plot(ews_metrics$Mid_Point, ews_metrics$ISI_Score, type="h", col="red", lwd=3,
+     main="Integrated Singularity Index (ISI)", ylab="Risk Score", xlab="Sequence")
+abline(v=peak_sample, col="darkred", lty=2)
