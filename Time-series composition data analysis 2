@@ -1,0 +1,78 @@
+# =================================================================
+# ITAGAKI-SYSTEM V16.1: SENSITIVITY-TUNED TREND PILOT
+# -----------------------------------------------------------------
+# ADJUSTMENT: 
+#   - Lowered Poisson Gate (3x -> 1.5x) for subtle trends
+#   - Detailed "Gate-Failure" Diagnostics
+# 
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License
+# =================================================================
+
+# --- 1. USER CONFIGURATION ---
+selected_time_indices <- c(1, 2, 3, 4) 
+abundance_threshold <- 0.000001 
+
+# SENSITIVITY TUNING: 
+# 3.0 = Very Strict (Standard)
+# 1.5 = Sensitive (For subtle trends like 7-10% increases)
+snr_sensitivity_factor <- 1.5 
+
+# --- 2. DATA PREPARATION ---
+raw_data <- as.matrix(Dataset)[selected_time_indices, ]
+n_tp <- nrow(raw_data)
+valid_taxa_mask <- apply(raw_data, 2, function(x) all(x >= abundance_threshold))
+d_m <- raw_data[, valid_taxa_mask, drop = FALSE]
+taxa_names <- colnames(d_m)
+eff_lib <- 1 / (mean(apply(d_m, 2, min)) + 1e-20)
+
+# --- 3. ANCHOR SELECTION & RECONSTRUCTION ---
+# (Same logic as V16.0)
+sf_jitter <- apply(d_m, 2, function(col) var(diff(log(1/(col + 1e-20)))))
+best_anchor_idx <- which.min(sf_jitter)
+abs_recovery <- sweep(d_m, 1, 1/(d_m[, best_anchor_idx] + 1e-20), "*")
+
+# --- 4. DETAILED MULTI-GATE DIAGNOSTICS ---
+
+# Gate 1: Monotonicity
+gate_mono <- apply(abs_recovery, 2, function(x) all(diff(x) > 0))
+
+# Gate 2: Poisson SNR (Using Tuned Sensitivity)
+total_delta <- abs_recovery[n_tp, ] - abs_recovery[1, ]
+poisson_err <- sqrt(1 / (colMeans(d_m) * eff_lib + 1e-20))
+gate_snr <- total_delta > (snr_sensitivity_factor * poisson_err)
+
+# Gate 3: LOO Robustness
+gate_loo <- apply(abs_recovery, 2, function(x) {
+  check <- logical(length(x))
+  for(i in 1:length(x)) check[i] <- all(diff(x[-i]) > 0)
+  return(all(check))
+})
+
+# --- 5. REPORTING THE "FAILED" REASON ---
+full_diagnostics <- data.frame(
+  Component = taxa_names,
+  Is_Monotonic = gate_mono,
+  Pass_SNR = gate_snr,
+  Pass_LOO = gate_loo,
+  Final_Decision = ifelse(gate_mono & gate_snr & gate_loo, "DETECTED", "REJECTED")
+)
+
+# --- 6. FINAL OUTPUT ---
+cat("\n==========================================================\n")
+cat("      ITAGAKI-SYSTEM V16.1: SENSITIVITY REPORT            \n")
+cat("==========================================================\n")
+cat(sprintf("Sensitivity Factor: %.1f | Anchor: %s\n", snr_sensitivity_factor, taxa_names[best_anchor_idx]))
+cat("----------------------------------------------------------\n")
+
+detected <- full_diagnostics[full_diagnostics$Final_Decision == "DETECTED", ]
+if(nrow(detected) > 0) {
+  print(detected[, 1:4], row.names = FALSE)
+} else {
+  cat("No trends detected even with higher sensitivity.\n")
+  cat("Top candidates near the gate:\n")
+  # Show candidates that passed Monotonicity but failed others
+  print(head(full_diagnostics[full_diagnostics$Is_Monotonic == TRUE, ], 10), row.names = FALSE)
+}
+cat("==========================================================\n")
