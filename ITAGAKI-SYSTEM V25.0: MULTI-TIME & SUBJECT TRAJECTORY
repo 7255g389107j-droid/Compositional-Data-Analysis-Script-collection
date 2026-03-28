@@ -1,0 +1,52 @@
+# =================================================================
+# ITAGAKI-SYSTEM V25.0: MULTI-TIME & SUBJECT TRAJECTORY
+# -----------------------------------------------------------------
+# Feature: Subject-linked PCA Trajectory for Multi-Group/Time
+# Logic: Dynamic Palette + Subject ID Mapping
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# =================================================================
+
+itagaki_trajectory_v25 <- function(Dataset, Group_Labels, Subject_IDs) {
+  
+  P_raw <- as.matrix(Dataset)
+  groups <- as.factor(Group_Labels)
+  lvls <- levels(groups)
+  subs <- as.factor(Subject_IDs)
+  
+  # 1. DYNAMIC COLOR PALETTE (For many groups)
+  palette_cols <- terrain.colors(length(lvls))
+  group_cols <- palette_cols[as.numeric(groups)]
+  
+  # 2. CLR-PCA (Standard Itagaki Logic)
+  P_core <- sweep(P_raw, 1, rowSums(P_raw), "/")
+  clr_core <- sweep(log(P_core + 1e-20), 1, rowMeans(log(P_core + 1e-20)), "-")
+  pca_res <- prcomp(clr_core, center = TRUE, scale. = FALSE)
+  var_exp <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
+
+  # 3. VISUALIZATION (PCA with Subject Lines)
+  plot(pca_res$x[, 1], pca_res$x[, 2], col = group_cols, pch = 19, cex = 1.5,
+       xlab = sprintf("PC1 (%.1f%%)", var_exp[1]), 
+       ylab = sprintf("PC2 (%.1f%%)", var_exp[2]),
+       main = "Aitchison Trajectory: Subject-wise Movement")
+  grid()
+
+  # 4. SUBJECT-WISE LINE DRAWING (The 'Trajectory' Fact)
+  # Connect samples belonging to the same Subject ID
+  for(s in levels(subs)) {
+    s_idx <- which(subs == s)
+    # Order points by time (assuming Group_Labels order represents time)
+    lines(pca_res$x[s_idx, 1], pca_res$x[s_idx, 2], col = "gray70", lwd = 0.8)
+  }
+  
+  legend("topright", legend = lvls, col = palette_cols, pch = 19, bty = "n", cex = 0.8)
+  
+  return(list(pca = pca_res, clr = clr_core))
+}
+
+# --- USAGE EXAMPLE ---
+# Dataset: 30 rows (10 subjects x 3 timepoints)
+# Subject_IDs <- rep(paste0("Subj_", 1:10), each = 3)
+# Group_Labels <- rep(c("Point 0", "Point 1", "Point 3"), 10)
+# results <- itagaki_trajectory_v25(Dataset, Group_Labels, Subject_IDs)
