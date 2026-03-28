@@ -1,0 +1,107 @@
+# =================================================================
+# ITAGAKI-SYSTEM V20.0: THE STATIC CODA ENGINE (PRODUCTION)
+# -----------------------------------------------------------------
+# Author: Tatsuki Itagaki
+# Features: 
+#   - Automatic Core Taxa Discovery
+#   - Subcompositional Coherence Validation
+#   - Aitchison Geometry Centroid Analysis
+#   - Peripheral Impact Quantification
+# License: MIT License
+# =================================================================
+
+itagaki_static_engine_v20 <- function(Dataset, Group_Labels, 
+                                      min_prevalence = 0.50, 
+                                      abundance_threshold = 1e-6) {
+  
+  # --- 1. PRE-FLIGHT CHECKS & DATA CLEANING ---
+  P_raw <- as.matrix(Dataset)
+  if(any(is.na(P_raw))) stop("Dataset contains NA values.")
+  
+  # Remove samples with total sum of zero (Zero-safety)
+  row_sums <- rowSums(P_raw)
+  if(any(row_sums == 0)) {
+    warning("Removing samples with all zero values.")
+    P_raw <- P_raw[row_sums > 0, ]
+    Group_Labels <- Group_Labels[row_sums > 0]
+  }
+  
+  groups <- as.factor(Group_Labels)
+  lvls <- levels(groups)
+  
+  # --- 2. CORE DISCOVERY (Structural Anchor Selection) ---
+  pa_matrix <- P_raw > abundance_threshold
+  prevalence <- colMeans(pa_matrix)
+  core_taxa <- colnames(P_raw)[prevalence >= min_prevalence]
+  
+  if(length(core_taxa) < 3) {
+    stop("CRITICAL: Too few shared components for structural analysis. Lower min_prevalence.")
+  }
+
+  # --- 3. SUBCOMPOSITIONAL RE-CLOSING & CLR TRANSFORMATION ---
+  # Mandatory re-closing for Subcompositional Coherence
+  P_core <- P_raw[, core_taxa, drop=FALSE]
+  P_core <- sweep(P_core, 1, rowSums(P_core), "/")
+  
+  # CLR (Centered Log-Ratio) Transformation
+  # Adding a minimal constant to handle any residual zeros
+  log_core <- log(P_core + 1e-20)
+  clr_core <- sweep(log_core, 1, rowMeans(log_core), "-")
+
+  # --- 4. PERIPHERAL IMPACT (Quantifying Missing/Unique Mass) ---
+  # peripheral_impact is the mass of taxa excluded from the core
+  core_mass <- rowSums(P_raw[, core_taxa, drop=FALSE])
+  peripheral_impact <- 1 - (core_mass / rowSums(P_raw))
+
+  # --- 5. COHERENCE VALIDATION (Mathematical Proof) ---
+  var_raw  <- apply(P_raw[, core_taxa], 2, var)
+  var_core <- apply(clr_core, 2, var)
+  coherence_rho <- cor(var_raw, var_core, method="spearman")
+
+  # --- 6. GROUP CENTROID & DISTANCE CALCULATION ---
+  group_centroids <- t(sapply(lvls, function(l) {
+    colMeans(clr_core[groups == l, , drop=FALSE])
+  }))
+  dist_obj <- dist(group_centroids)
+  dist_matrix <- as.matrix(dist_obj)
+  rownames(dist_matrix) <- colnames(dist_matrix) <- lvls
+
+  # --- 7. FINAL REPORTING ---
+  cat("\n", rep("=", 60), "\n", sep="")
+  cat("   ITAGAKI-SYSTEM V20.0: STATIC CODA COMPLETE REPORT\n")
+  cat(rep("=", 60), "\n", sep="")
+  cat(sprintf("Total Features analyzed   : %d\n", ncol(P_raw)))
+  cat(sprintf("Core Anchor Features      : %d\n", length(core_taxa)))
+  cat(sprintf("Subcomp. Coherence (Rho)  : %.4f\n", coherence_rho))
+  cat(sprintf("Peripheral Impact (Mean)  : %.4f\n", mean(peripheral_impact)))
+  cat(rep("-", 60), "\n", sep="")
+  cat("Group Structural Distance (Aitchison Center):\n")
+  print(round(dist_matrix, 4))
+  cat(rep("=", 60), "\n", sep="")
+
+  # Return all diagnostic data
+  return(list(
+    clr_core = clr_core,
+    peripheral_impact = peripheral_impact,
+    dist_matrix = dist_matrix,
+    core_taxa = core_taxa,
+    coherence = coherence_rho
+  ))
+}
+
+# =================================================================
+# DEMO EXECUTION (Test with dummy data)
+# =================================================================
+# 1. Create a dummy dataset (10 samples, 50 taxa)
+set.seed(42)
+dummy_data <- matrix(runif(500, 0, 1), nrow=10, ncol=50)
+colnames(dummy_data) <- paste0("Taxon_", 1:50)
+
+# 2. Add some "zeros" to simulate real-world component mismatch
+dummy_data[sample(1:500, 100)] <- 0
+
+# 3. Define groups
+dummy_groups <- c(rep("Control", 5), rep("Test", 5))
+
+# 4. Run the Engine
+analysis_results <- itagaki_static_engine_v20(dummy_data, dummy_groups)
