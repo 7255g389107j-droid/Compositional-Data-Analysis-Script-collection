@@ -1,0 +1,122 @@
+# =================================================================
+# ITAGAKI-SYSTEM V21.0: THE INTEGRATED STATIC CODA ENGINE
+# -----------------------------------------------------------------
+# Feature: Structural Divergence & Automated Scientific Interpretation
+# Logic: Subcompositional Coherence + Aitchison Geometry Centroids
+# Author: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# =================================================================
+
+itagaki_static_complete_v21 <- function(Dataset, Group_Labels, 
+                                        min_prevalence = 0.50, 
+                                        abundance_threshold = 1e-6) {
+  
+  # --- 1. DATA SANITIZATION ---
+  P_raw <- as.matrix(Dataset)
+  if(any(is.na(P_raw))) stop("Dataset contains NA values.")
+  
+  # Remove null-mass samples (all zeros)
+  row_sums <- rowSums(P_raw)
+  if(any(row_sums == 0)) {
+    warning("Excluding samples with zero-sum total mass.")
+    P_raw <- P_raw[row_sums > 0, ]
+    Group_Labels <- Group_Labels[row_sums > 0]
+  }
+  
+  groups <- as.factor(Group_Labels)
+  lvls <- levels(groups)
+  
+  # --- 2. STRUCTURAL ANCHORING (Core Taxa Discovery) ---
+  pa_matrix <- P_raw > abundance_threshold
+  prevalence <- colMeans(pa_matrix)
+  core_taxa <- colnames(P_raw)[prevalence >= min_prevalence]
+  
+  if(length(core_taxa) < 3) {
+    stop("CRITICAL ERROR: Insufficient shared components for geometric anchoring.")
+  }
+
+  # --- 3. SUBCOMPOSITIONAL RE-CLOSING & CLR TRANSFORMATION ---
+  # Re-closing is mandatory to maintain Aitchison geometry in subcompositions
+  P_core <- P_raw[, core_taxa, drop=FALSE]
+  P_core <- sweep(P_core, 1, rowSums(P_core), "/") 
+  
+  # CLR (Centered Log-Ratio) - Projecting to the simplex interior
+  log_core <- log(P_core + 1e-20)
+  clr_core <- sweep(log_core, 1, rowMeans(log_core), "-")
+
+  # --- 4. PERIPHERAL DISTURBANCE (Quantifying Missing Mass) ---
+  core_mass <- rowSums(P_raw[, core_taxa, drop=FALSE])
+  peripheral_impact <- 1 - (core_mass / rowSums(P_raw))
+
+  # --- 5. COHERENCE VALIDATION (Subcompositional Robustness) ---
+  # Spearman correlation between original variance and subcompositional variance
+  var_raw  <- apply(P_raw[, core_taxa], 2, var)
+  var_core <- apply(clr_core, 2, var)
+  coherence_rho <- cor(var_raw, var_core, method="spearman")
+
+  # --- 6. GROUP GEOMETRIC CENTROIDS & DISTANCE ---
+  group_centroids <- t(sapply(lvls, function(l) {
+    colMeans(clr_core[groups == l, , drop=FALSE])
+  }))
+  dist_obj <- dist(group_centroids)
+  dist_matrix <- as.matrix(dist_obj)
+  rownames(dist_matrix) <- colnames(dist_matrix) <- lvls
+
+  # --- 7. AUTOMATED SCIENTIFIC INTERPRETATION ---
+  cat("\n", rep("=", 70), "\n", sep="")
+  cat("      ITAGAKI-SYSTEM V21.0: STATIC ANALYSIS & INTERPRETATION\n")
+  cat(rep("=", 70), "\n", sep="")
+  cat(sprintf("Core Anchor Features      : %d (Shared Structure)\n", length(core_taxa)))
+  cat(sprintf("Subcomp. Coherence (Rho)  : %.6f\n", coherence_rho))
+  cat(sprintf("Mean Peripheral Impact    : %.4f (Unshared Mass)\n", mean(peripheral_impact)))
+  cat(rep("-", 70), "\n", sep="")
+
+  # Interpretation Logic A: Coherence
+  interp_coherence <- if(coherence_rho > 0.95) {
+    "EXCELLENT: The core structure is invariant. Component stripping did not distort the signal."
+  } else if(coherence_rho > 0.85) {
+    "ACCEPTABLE: The core structure is stable, though minor peripheral influence is present."
+  } else {
+    "WARNING: Low coherence. The excluded components significantly impact the system's geometry."
+  }
+
+  # Interpretation Logic B: Divergence
+  max_dist <- max(dist_matrix)
+  interp_divergence <- if(max_dist > 5.0) {
+    "HIGH: Significant structural reorganization detected between groups."
+  } else if(max_dist > 2.0) {
+    "MODERATE: Detectable shifts in the Aitchison geometry between group centroids."
+  } else {
+    "LOW: Group structures remain geometrically similar (Homeostatic)."
+  }
+
+  cat(sprintf("1. STRUCTURAL VALIDITY  : %s\n", interp_coherence))
+  cat(sprintf("2. SYSTEM DIVERGENCE    : %s\n", interp_divergence))
+  cat(sprintf("3. PERIPHERAL DYNAMICS  : %.1f%% of mass is group-specific or non-core.\n", mean(peripheral_impact)*100))
+  cat(rep("-", 70), "\n", sep="")
+  cat("Group Structural Distance Matrix (Aitchison Center):\n")
+  print(round(dist_matrix, 4))
+  cat(rep("=", 70), "\n", sep="")
+
+  # Return results for next phase (Repeated Measures)
+  return(list(
+    clr_core = clr_core,
+    peripheral_impact = peripheral_impact,
+    dist_matrix = dist_matrix,
+    core_taxa = core_taxa,
+    coherence = coherence_rho,
+    group_divergence = max_dist
+  ))
+}
+
+# =================================================================
+# PRODUCTION READINESS: DUMMY EXECUTION TEST
+# =================================================================
+set.seed(42)
+dummy_data <- matrix(runif(500, 0, 1), nrow=10, ncol=50)
+colnames(dummy_data) <- paste0("Comp_", 1:50)
+dummy_groups <- c(rep("Control", 5), rep("Test", 5))
+
+# RUN ENGINE
+analysis_output <- itagaki_static_complete_v21(dummy_data, dummy_groups)
