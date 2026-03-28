@@ -24,6 +24,8 @@ itagaki_trajectory_v25 <- function(Dataset, Group_Labels, Subject_IDs) {
   clr_core <- sweep(log(P_core + 1e-20), 1, rowMeans(log(P_core + 1e-20)), "-")
   pca_res <- prcomp(clr_core, center = TRUE, scale. = FALSE)
   var_exp <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
+　my_rot <- results$pca$rotation
+  class(my_rot)
 
   # 3. VISUALIZATION (PCA with Subject Lines)
   plot(pca_res$x[, 1], pca_res$x[, 2], col = group_cols, pch = 19, cex = 1.5,
@@ -50,3 +52,5 @@ itagaki_trajectory_v25 <- function(Dataset, Group_Labels, Subject_IDs) {
 # Subject_IDs <- rep(paste0("Subj_", 1:10), each = 3)
 # Group_Labels <- rep(c("Point 0", "Point 1", "Point 3"), 10)
 # results <- itagaki_trajectory_v25(Dataset, Group_Labels, Subject_IDs)
+# my_rot <- results$pca$rotation
+# head(my_rot[order(abs(my_rot[, "PC1"]), decreasing = TRUE), 1:2], 10)
