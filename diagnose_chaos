@@ -95,9 +95,11 @@ diagnose_chaos_v8 <- function(Dataset, effective_library_size) {
 }
 
 # Example Usage:
+# eff_lib <- 1 / mean(apply(Dataset, 2, min))
 # results <- diagnose_chaos_v8(Dataset = your_proportion_matrix, effective_library_size = eff_lib)
 # View(results)
 
 #Dataset = Dataset
+ eff_lib <- 1 / mean(apply(Dataset, 2, min))
  results <- diagnose_chaos_v8(Dataset = Dataset, effective_library_size = eff_lib)
  View(results)
