@@ -1,0 +1,2 @@
+# Remove columns containing at least one zero and re-assign to 'Dataset'
+Dataset <- Dataset[, colSums(Dataset == 0) == 0]
