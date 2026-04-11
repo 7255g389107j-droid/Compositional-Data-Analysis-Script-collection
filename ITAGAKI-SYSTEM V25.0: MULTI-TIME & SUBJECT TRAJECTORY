@@ -30,7 +30,7 @@ itagaki_trajectory_v25 <- function(Dataset, Group_Labels, Subject_IDs) {
   
   # 2. CLR-PCA (Standard Itagaki Logic)
   P_core <- sweep(P_raw, 1, rowSums(P_raw), "/")
-  clr_core <- sweep(log(P_core + 1e-20), 1, rowMeans(log(P_core + 1e-20)), "-")
+  clr_core <- sweep(log(P_core), 1, rowMeans(log(P_core)), "-") #If there are zeros, you can add 1e-20 or try anthor method. 
   pca_res <- prcomp(clr_core, center = TRUE, scale. = FALSE)
   var_exp <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
 
