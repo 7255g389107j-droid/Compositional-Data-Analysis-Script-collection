@@ -18,10 +18,11 @@ Unlike standard CoDA packages that remain in the "closed" simplex, this system e
 ## 📚 Academic Citation
 If you use this logic or these scripts in your research, please cite:
 1. **Ohta, T. (2011).** *Invariance of Log-Ratios in Compositional Data.* DOI: 10.1007/s11004-011-9332-y
-2. **Itagaki, T. (2024).**  DOI: 10.3390/microorganisms12071484
-3. **Itagaki, T. (2025).**  DOI: 10.3390/nu17233681
-4. **Itagaki, T. (2026).** *The Itagaki-System: Absolute Basis Deconvolution.* DOI: 10.13140/RG.2.2.21953.93284
-5. **Itagaki, T. (2026).** *The Itagaki-System.* DOI: 10.13140/RG.2.2.35015.25762
+2. **Aitchison, J. (2002).** *Biplots of Compositional Data.* DOI: 10.1111/1467-9876.00275
+3. **Itagaki, T. (2024).**  DOI: 10.3390/microorganisms12071484
+4. **Itagaki, T. (2025).**  DOI: 10.3390/nu17233681
+5. **Itagaki, T. (2026).** *The Itagaki-System: Absolute Basis Deconvolution.* DOI: 10.13140/RG.2.2.21953.93284
+6. **Itagaki, T. (2026).** *The Itagaki-System.* DOI: 10.13140/RG.2.2.35015.25762
 
 ## ⚖️ License
 Licensed under the **MIT License**. 
