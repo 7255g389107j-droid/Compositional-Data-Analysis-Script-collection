@@ -39,7 +39,7 @@ eff_lib <- 1 / (mean(apply(d_m, 2, min)) + 1e-20)
 # --- 3. ANCHOR SELECTION & RECONSTRUCTION ---
 # (Same logic as V16.0)
 sf_jitter <- apply(d_m, 2, function(col) var(diff(log(1/(col + 1e-20)))))
-best_anchor_idx <- which.min(sf_jitter)
+best_anchor_idx <- which.min(sf_jitter) # or which(colnames(d_m) == "X")
 abs_recovery <- sweep(d_m, 1, 1/(d_m[, best_anchor_idx] + 1e-20), "*")
 
 # --- 4. DETAILED MULTI-GATE DIAGNOSTICS ---
