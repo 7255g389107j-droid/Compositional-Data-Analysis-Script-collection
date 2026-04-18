@@ -1,0 +1,90 @@
+# =================================================================
+# ITAGAKI-SYSTEM V16.3: GROWTH GATE DIAGNOSTICIAN
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2024). DOI: 10.3390/microorganisms12071484
+# Itagaki, T (2025). DOI: 10.3390/nu17233681
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.35015.25762
+# =================================================================
+
+# --- 1. RE-ESTABLISH PHYSICAL CONSTANTS ---
+avg_min_val <- mean(apply(abs_mass_recovery, 2, min))
+eff_lib <- 1 / (avg_min_val + 1e-20) 
+
+abs_data <- abs_mass_recovery 
+n_tp <- nrow(abs_data)
+taxa_names <- colnames(abs_data)
+
+avg_abs_val <- colMeans(abs_data)
+poisson_sd <- sqrt(avg_abs_val / eff_lib)
+
+# --- 2. TRIPLE-GATE EXECUTION (DIAGNOSTIC MODE) ---
+
+# GATE 1: Monotonicity
+gate1_mono <- apply(abs_data, 2, function(x) all(diff(x) > 0))
+
+# GATE 2: Physical SNR
+gate2_snr <- (abs_data[n_tp, ] - abs_data[1, ]) > (3 * poisson_sd)
+
+# GATE 3: LOO Robustness
+gate3_loo <- apply(abs_data, 2, function(x) {
+  res <- logical(length(x))
+  for(i in 1:length(x)) {
+    x_sub <- x[-i]
+    res[i] <- all(diff(x_sub) > 0)
+  }
+  return(all(res))
+})
+
+# --- 3. CONSTRUCT DIAGNOSTIC TABLE ---
+diagnostic_df <- data.frame(
+  Taxon = taxa_names,
+  Monotonic = ifelse(gate1_mono, "PASS", "FAIL"),
+  SNR_3sigma = ifelse(gate2_snr, "PASS", "FAIL"),
+  Robust_LOO = ifelse(gate3_loo, "PASS", "FAIL"),
+  SNR_Value = round((abs_data[n_tp, ] - abs_data[1, ]) / (poisson_sd + 1e-20), 2)
+)
+
+# Identify Final Winners
+verified_growth_idx <- which(gate1_mono & gate2_snr & gate3_loo)
+
+# --- 4. ANALYTICAL REPORT ---
+cat("\n", rep("=", 70), "\n", sep="")
+cat("      ITAGAKI-SYSTEM V16.3: GROWTH GATE DIAGNOSTIC REPORT\n")
+cat(rep("=", 70), "\n", sep="")
+cat(sprintf("Effective Library Size (Resolution): %.2e\n", eff_lib))
+cat(sprintf("Total Valid Taxa Analyzed           : %d\n", length(taxa_names)))
+cat(rep("-", 70), "\n", sep="")
+
+# Show details of candidates (sorted by SNR)
+cat("[GATE-BY-GATE PASS/FAIL STATUS]\n")
+print(head(diagnostic_df[order(-diagnostic_df$SNR_Value), ], 20), row.names = FALSE)
+
+cat(rep("-", 70), "\n", sep="")
+
+if(length(verified_growth_idx) > 0) {
+  cat(sprintf("DETECTED VERIFIED GROWTH: %d taxa\n", length(verified_growth_idx)))
+  # ... (Visualization logic remains same)
+} else {
+  cat("RESULT: No taxa passed the strict Triple-Gate Verification.\n\n")
+  
+  # Identify common failure points
+  fail_mono <- sum(!gate1_mono)
+  fail_snr  <- sum(!gate2_snr)
+  fail_loo  <- sum(!gate3_loo)
+  
+  cat("--- FAILURE ANALYSIS ---\n")
+  cat(sprintf("- FAILED GATE 1 (Non-Monotonic) : %d taxa\n", fail_mono))
+  cat(sprintf("- FAILED GATE 2 (Below Noise)   : %d taxa\n", fail_snr))
+  cat(sprintf("- FAILED GATE 3 (Weak Trend)    : %d taxa\n", fail_loo))
+  cat("\nADVICE: If SNR is the bottleneck, the increase is physically too small.\n")
+  cat("ADVICE: If Monotonic is the bottleneck, the trend is unstable/fluctuating.\n")
+}
+cat(rep("=", 70), "\n", sep="")
