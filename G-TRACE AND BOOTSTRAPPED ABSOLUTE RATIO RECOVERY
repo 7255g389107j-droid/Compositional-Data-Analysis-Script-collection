@@ -1,0 +1,135 @@
+# =================================================================
+# G-TRACE AND BOOTSTRAPPED ABSOLUTE RATIO RECOVERY
+# Methodology: Geometric Mean Log-Ratio (GMLR) Distortion Correction
+# Logic: Minimizing Geometric Variance to Solve for Absolute Mass Ratios
+# Bootstrap: 1000 Iterations for 95% Confidence Intervals
+# 
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License
+# =================================================================
+
+# --- 1. SETTINGS & FILTERING ---
+set.seed(42)
+n_boot <- 1000
+# Manual Policy: Only taxa present in ALL samples >= 0.00001
+abundance_threshold <- 0.00001 
+
+# Dataset must be a Proportion Matrix (Rows=Samples, Cols=Taxa)
+ds_raw <- as.matrix(Dataset)
+
+# STRICT FILTERING: Identify valid components
+valid_taxa_mask <- apply(ds_raw, 2, function(x) all(x >= abundance_threshold))
+
+if(sum(valid_taxa_mask) < 2) {
+  stop("CRITICAL ERROR: Insufficient components passed the 1e-5 threshold.")
+}
+
+d_m <- ds_raw[, valid_taxa_mask, drop = FALSE]
+# Re-closing to Ensure Unit Sum
+d_m <- sweep(d_m, 1, rowSums(d_m), "/")
+n_samples <- nrow(d_m)
+taxa_names <- colnames(d_m)
+
+# --- 2. RECOVERY CORE ENGINE ---
+# Function to calculate Scaling Factor (rho) and Residual Noise
+get_scaling_and_noise <- function(data_subset) {
+  log_data <- log(data_subset)
+  # Geometric Mean across samples (Reference Center)
+  geo_mean_center <- colMeans(log_data)
+  # Solve for sample-wise distortion (rho) via GMLR
+  rho_estimates <- rowMeans(sweep(log_data, 2, geo_mean_center, "-"))
+  scaling_factors <- exp(-rho_estimates)
+  
+  # Calculate Residual Geometric Noise (G-Noise)
+  residuals <- sweep(log_data, 1, rho_estimates, "+")
+  g_noise <- apply(sweep(residuals, 2, geo_mean_center, "-"), 1, function(x) sqrt(mean(x^2)))
+  
+  return(list(sf = scaling_factors, noise = g_noise))
+}
+
+# Baseline Analysis
+baseline_res <- get_scaling_and_noise(d_m)
+base_sf <- baseline_res$sf
+base_noise <- baseline_res$noise
+
+# --- 3. BOOTSTRAP ENGINE (1000 ITERATIONS) ---
+boot_matrix <- matrix(NA, nrow = n_boot, ncol = n_samples)
+
+cat("Executing 1000 Bootstrap Iterations for Geometric Stability...\n")
+for(b in 1:n_boot) {
+  # Resample taxa with replacement
+  boot_taxa_idx <- sample(1:ncol(d_m), replace = TRUE)
+  boot_res <- get_scaling_and_noise(d_m[, boot_taxa_idx])
+  boot_matrix[b, ] <- boot_res$sf
+}
+
+# Calculate 95% Confidence Intervals
+sf_lower <- apply(boot_matrix, 2, quantile, probs = 0.025)
+sf_upper <- apply(boot_matrix, 2, quantile, probs = 0.975)
+sf_mean  <- apply(boot_matrix, 2, mean)
+
+# Normalize scaling to Sample 1 (Ratio recovery)
+sf_plot  <- sf_mean / sf_mean[1]
+ci_low   <- sf_lower / sf_mean[1]
+ci_high  <- sf_upper / sf_mean[1]
+
+# Final Corrected Absolute Abundance
+abs_mass_recovery <- sweep(d_m, 1, sf_mean, "*")
+
+# --- 4. PROFESSIONAL ANALYTICAL REPORT ---
+cat("\n", rep("=", 60), "\n", sep="")
+cat("      G-TRACE AND BOOTSTRAPPED ABSOLUTE RATIO RECOVERY : SYSTEM STABILITY REPORT        \n")
+cat(rep("=", 60), "\n", sep="")
+cat(sprintf("Analyzed Components   : %d\n", ncol(d_m)))
+cat(sprintf("Abundance Threshold   : %g\n", abundance_threshold))
+cat(sprintf("System G-Noise (Mean) : %.6f\n", mean(base_noise)))
+cat(rep("-", 60), "\n", sep="")
+
+report_df <- data.frame(
+  Sample = 1:n_samples,
+  Abs_Mass_Ratio = round(sf_plot, 4),
+  CI_95_Low = round(ci_low, 4),
+  CI_95_High = round(ci_high, 4),
+  G_Noise = round(base_noise, 6)
+)
+print(report_df, row.names = FALSE)
+
+cat("\n[RECOVERY STATUS]\n")
+if(mean(base_noise) < 0.2) {
+  cat("STATUS: HIGH CONFIDENCE. Distortion correction is strictly consistent.\n")
+} else if(mean(base_noise) < 0.5) {
+  cat("STATUS: MODERATE. System shows relative stability with some drift.\n")
+} else {
+  cat("STATUS: LOW. High residual noise; check for outliers or system collapse.\n")
+}
+cat(rep("=", 60), "\n", sep="")
+
+# --- 5. VISUALIZATION ---
+dev.new(width=12, height=9)
+layout(matrix(c(1, 2), 2, 1))
+par(mar=c(5, 6, 4, 2))
+
+# Plot A: Absolute Mass Ratio with Labels and Bootstrap CI
+y_max <- max(ci_high) * 1.3
+bp <- barplot(sf_plot, 
+              main="Reconstructed Absolute Total Mass Ratio (95% Bootstrap CI)\nDistortion Corrected via GMLR",
+              ylab="Absolute Mass Ratio (Relative to Sample 1)", 
+              xlab="Sample Index", ylim=c(0, y_max),
+              col="#3498db", border=NA, names.arg=1:n_samples)
+
+# Add 95% CI Error Bars
+arrows(bp, ci_low, bp, ci_high, angle=90, code=3, length=0.05, lwd=1.5, col="#2c3e50")
+
+# Add Scaling Factor Labels
+text(bp, ci_high, labels=round(sf_plot, 2), pos=3, cex=0.9, font=2, col="#c0392b")
+abline(h=1, lty=2, col="#7f8c8d")
+
+# Plot B: Individual Taxa Absolute Dynamics (Corrected)
+target_taxa <- 1:min(5, ncol(d_m))
+viz_cols <- c("#27ae60", "#c0392b", "#8e44ad", "#f39c12", "#2c3e50")
+matplot(abs_mass_recovery[, target_taxa], type="b", pch=16, lty=1, lwd=2, col=viz_cols,
+        main="Corrected Absolute Dynamics (Top Valid Components)",
+        ylab="Estimated Absolute Mass", xlab="Sample Index")
+grid()
+legend("topright", legend=taxa_names[target_taxa], col=viz_cols, pch=16, bty="n", cex=0.8)
