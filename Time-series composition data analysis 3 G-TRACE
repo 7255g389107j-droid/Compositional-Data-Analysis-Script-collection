@@ -1,0 +1,82 @@
+# =================================================================
+# ITAGAKI-SYSTEM V16.2: ABSOLUTE GROWTH VERIFIER (WITH NOISE ENGINE)
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2024). DOI: 10.3390/microorganisms12071484
+# Itagaki, T (2025). DOI: 10.3390/nu17233681
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.35015.25762
+# =================================================================
+
+# --- 1. RE-ESTABLISH PHYSICAL CONSTANTS ---
+# Re-calculating Effective Library Size from the corrected absolute data
+# This represents the "informational density" of your dataset.
+avg_min_val <- mean(apply(abs_mass_recovery, 2, min))
+eff_lib <- 1 / (avg_min_val + 1e-20) 
+
+# --- 2. DATA PREPARATION ---
+abs_data <- abs_mass_recovery 
+n_tp <- nrow(abs_data)
+taxa_names <- colnames(abs_data)
+
+# Estimate Poisson Noise Floor for each taxon based on its absolute scale
+# Formula: sqrt(mean_abundance / effective_sampling_depth)
+avg_abs_val <- colMeans(abs_data)
+poisson_sd <- sqrt(avg_abs_val / eff_lib)
+
+# --- 3. TRIPLE-GATE VERIFICATION ---
+
+# GATE 1: Strict Monotonicity (Is it always increasing?)
+gate1_mono <- apply(abs_data, 2, function(x) all(diff(x) > 0))
+
+# GATE 2: Physical SNR (Is the increase > 3x the noise floor?)
+gate2_snr <- (abs_data[n_tp, ] - abs_data[1, ]) > (3 * poisson_sd)
+
+# GATE 3: LOO Robustness (Does the trend survive even if 1 point is removed?)
+gate3_loo <- apply(abs_data, 2, function(x) {
+  res <- logical(length(x))
+  for(i in 1:length(x)) {
+    x_sub <- x[-i]
+    res[i] <- all(diff(x_sub) > 0)
+  }
+  return(all(res))
+})
+
+# --- 4. IDENTIFY TRUE GROWTH CANDIDATES ---
+verified_growth_idx <- which(gate1_mono & gate2_snr & gate3_loo)
+
+# --- 5. ANALYTICAL REPORT ---
+cat("\n", rep("=", 60), "\n", sep="")
+cat("      FINAL VERIFICATION: ABSOLUTE GROWTH HYPOTHESES      \n")
+cat(rep("=", 60), "\n", sep="")
+cat(sprintf("Effective Library Size (Resolution): %.2e\n", eff_lib))
+
+if(length(verified_growth_idx) > 0) {
+  cat(sprintf("DETECTED VERIFIED GROWTH: %d taxa\n\n", length(verified_growth_idx)))
+  
+  report <- data.frame(
+    Taxon = taxa_names[verified_growth_idx],
+    Total_Fold_Change = round(abs_data[n_tp, verified_growth_idx] / abs_data[1, verified_growth_idx], 2),
+    SNR_Score = round((abs_data[n_tp, verified_growth_idx] - abs_data[1, verified_growth_idx]) / (poisson_sd[verified_growth_idx] + 1e-20), 2)
+  )
+  print(report[order(-report$Total_Fold_Change), ], row.names = FALSE)
+  
+  # Visualization
+  target_viz <- verified_growth_idx[1:min(5, length(verified_growth_idx))]
+  matplot(abs_data[, target_viz, drop=F], type="b", pch=16, lwd=3, lty=1, col=1:length(target_viz),
+          main="Verified Absolute Growth (Distortion Corrected)",
+          xlab="Time Series Index", ylab="Estimated Absolute Mass")
+  grid()
+  legend("topleft", legend=taxa_names[target_viz], col=1:length(target_viz), pch=16, bty="n", cex=0.8)
+  
+} else {
+  cat("RESULT: No taxa passed the strict Triple-Gate Verification.\n")
+  cat("Check: Are the increases large enough to beat the Physical SNR?\n")
+}
+cat(rep("=", 60), "\n", sep="")
