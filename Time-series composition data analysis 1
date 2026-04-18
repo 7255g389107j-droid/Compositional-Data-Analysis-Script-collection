@@ -59,7 +59,7 @@ get_smoothness <- function(P) {
 }
 
 smooth_scores <- get_smoothness(d_m)
-best_anchor_idx <- which.min(smooth_scores)
+best_anchor_idx <- which.min(smooth_scores) # which(colnames(d_m) == "X")
 anchor_name <- taxa_names[best_anchor_idx]
 
 # --- 4. ABSOLUTE BASIS RECONSTRUCTION ---
