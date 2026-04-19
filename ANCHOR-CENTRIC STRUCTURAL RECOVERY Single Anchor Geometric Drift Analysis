@@ -16,6 +16,8 @@
 # Itagaki, T (2026). DOI: 10.13140/RG.2.2.35015.25762
 # =================================================================
 
+# Remove columns containing at least one zero and re-assign to 'Dataset'
+Dataset <- Dataset[, colSums(Dataset == 0) == 0]
 set.seed(42)
 n_boot <- 1000
 min_abundance_threshold <- 0.00001 
@@ -36,7 +38,7 @@ get_geometric_purity <- function(P) {
   L <- log(P)
   obs_v <- apply(L, 2, var)
   vlr <- var(L)
-  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median) + 1e-18)
+  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median) )
   return(pi_s)
 }
 global_anchor_idx <- which.max(get_geometric_purity(d_m))
