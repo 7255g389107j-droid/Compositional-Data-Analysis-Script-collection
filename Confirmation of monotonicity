@@ -87,7 +87,7 @@ if(length(consensus_growth) > 0) {
     # Extract only consensus taxa
     abs_v <- sweep(d_m[, consensus_growth, drop=FALSE], 1, plot_list[[i]]$sf, "*")
     matplot(abs_v, type="b", pch=16, lty=1, lwd=2, col=cols,
-            main=paste("Basis:", plot_list[[i]]$name), 
+            main=paste("Anchor:", plot_list[[i]]$name), 
             ylab="Abs Mass Scale (Rel. to S1)", xlab="Sample Index", las=1)
     grid(col="gray80")
     
@@ -98,7 +98,6 @@ if(length(consensus_growth) > 0) {
     
     mtext(paste("Pass Gate:", length(plot_list[[i]]$verified)), side=3, line=0.5, cex=0.8, col="darkblue")
   }
-  mtext("ITAGAKI V10200.0-ULTIMATE: Left-Labeled Factual Consensus", side=3, outer=TRUE, line=-2.5, cex=1.5, font=2)
 }
 
 # --- [6. ANALYTICAL REPORT] ---
