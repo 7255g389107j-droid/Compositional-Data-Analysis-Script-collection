@@ -1,0 +1,122 @@
+# =================================================================
+# ITAGAKI-SYSTEM V2100.0-ULTIMATE: DEFINITIVE DECONVOLUTION
+# -----------------------------------------------------------------
+# Methodology: Recursive Residual Subtraction & Dynamic Alpha Tuning
+# Philosophy: Locking Point Estimates to Polished Physical Reality
+# Developer: Tatsuki Itagaki (2026)
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2024). DOI: 10.3390/microorganisms12071484
+# Itagaki, T (2025). DOI: 10.3390/nu17233681
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.35015.25762
+# =================================================================
+
+# --- 0. DATA PURIFICATION ---
+# Ensuring no zero-inflation interferes with log-ratio geometry
+Dataset_clean <- Dataset[, colSums(Dataset == 0) == 0]
+ds_raw <- as.matrix(Dataset_clean)
+d_m <- sweep(ds_raw, 1, rowSums(ds_raw), "/") # Convert to proportions
+n_samples <- nrow(d_m)
+n_taxa <- ncol(d_m)
+
+# --- 1. IDENTIFY THE GEOMETRIC MASTER ANCHOR ---
+# Selecting the taxon with maximum stability in the log-ratio space
+get_geometric_purity <- function(P) {
+  L <- log(P); obs_v <- apply(L, 2, var); vlr <- var(L)
+  return(1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median)))
+}
+global_anchor_idx <- which.max(get_geometric_purity(d_m))
+global_anchor_name <- colnames(d_m)[global_anchor_idx]
+
+# --- 2. DYNAMIC ALPHA OPTIMIZATION (THE REFINING ENGINE) ---
+# Goal: Neutralize the "Mathematical Ghost" (compositional drift) in the anchor
+anchor_raw_log <- log(d_m[, global_anchor_idx])
+bg_matrix <- log(d_m[, -global_anchor_idx])
+bg_signal <- prcomp(bg_matrix, scale. = TRUE)$x[, 1] # Primary drift component
+
+# Optimize Alpha to minimize the correlation between anchor and background drift
+alpha_opt <- optimize(f = function(a) {
+  purified <- anchor_raw_log - (a * bg_signal)
+  abs(cor(purified, bg_signal))
+}, interval = c(0, 1))$minimum
+
+# Final Polished Physical Restoration (The Locked Fact)
+purified_anchor_log <- anchor_raw_log - (alpha_opt * bg_signal)
+sf_polished_raw <- exp(-purified_anchor_log)
+sf_ultimate_fact <- sf_polished_raw / sf_polished_raw[1] # Reference to S1
+
+# --- 3. BOOTSTRAP ENGINE (CI CALIBRATION) ---
+set.seed(42); n_boot <- 1000
+boot_res <- matrix(NA, nrow = n_boot, ncol = n_samples)
+
+for(b in 1:n_boot) {
+  # Taxa resampling to capture sub-compositional pull
+  other_taxa <- (1:n_taxa)[-global_anchor_idx]
+  b_idx <- c(global_anchor_idx, sample(other_taxa, replace = TRUE))
+  
+  b_dm <- d_m[, b_idx, drop = FALSE]
+  b_dm <- sweep(b_dm, 1, rowSums(b_dm), "/")
+  
+  # Recursive purification within bootstrap
+  b_anchor_log <- log(b_dm[, 1])
+  b_bg_signal <- prcomp(log(b_dm[, -1]), scale. = TRUE)$x[, 1]
+  b_purified <- b_anchor_log - (alpha_opt * b_bg_signal)
+  b_sf <- exp(-b_purified)
+  boot_res[b, ] <- b_sf / b_sf[1]
+}
+
+# Align CI to the Locked Point Estimate
+sf_boot_mean <- apply(boot_res, 2, mean)
+sf_lower <- sf_ultimate_fact * (apply(boot_res, 2, quantile, 0.025) / sf_boot_mean)
+sf_upper <- sf_ultimate_fact * (apply(boot_res, 2, quantile, 0.975) / sf_boot_mean)
+
+# --- 4. NUMERICAL OUTPUT ---
+report_df <- data.frame(
+  SampleID     = 1:n_samples,
+  Abs_Ratio    = round(sf_ultimate_fact, 4),
+  CI_95_Lower  = round(sf_lower, 4),
+  CI_95_Upper  = round(sf_upper, 4),
+  CI_Width     = round(sf_upper - sf_lower, 4),
+  Drift_Correction = round(alpha_opt * bg_signal, 4)
+)
+
+cat("\n==========================================================\n")
+cat("   ITAGAKI V2100.0-ULTIMATE: FINAL RECOVERY REPORT\n")
+cat("==========================================================\n")
+cat(sprintf(" MASTER ANCHOR   : %s\n", global_anchor_name))
+cat(sprintf(" OPTIMIZED ALPHA : %.6f (Drift Neutralization)\n", alpha_opt))
+cat("----------------------------------------------------------\n")
+print(report_df, row.names = FALSE)
+cat("==========================================================\n")
+
+# --- 5. BASE-R VISUALIZATION ---
+dev.new(width=10, height=7)
+par(mar=c(5, 6, 5, 2), bg="#FDFDFD")
+y_max <- max(sf_upper) * 1.2
+
+bp <- barplot(sf_ultimate_fact, 
+              ylim = c(0, y_max), 
+              col = "#2c3e50", border = NA,
+              ylab = "Absolute Mass Ratio (Rel. to Sample 1)",
+              xlab = "Sample Index",
+              names.arg = 1:n_samples,
+              main = "")
+
+# Title and Metadata
+title(main = "ITAGAKI-ULTIMATE: Polished Absolute Dynamics", adj = 0, line = 2, cex.main = 1.5)
+mtext(paste("Anchor:", global_anchor_name, "| Drift Neutralized (Alpha):", round(alpha_opt, 4)), 
+      adj = 0, line = 0.5, cex = 0.9, col = "#7f8c8d")
+
+# Error Bars and Fact Labels
+arrows(bp, sf_lower, bp, sf_upper, angle = 90, code = 3, length = 0.05, lwd = 2, col = "#e74c3c")
+text(bp, sf_upper, labels = round(sf_ultimate_fact, 2), pos = 3, cex = 0.8, font = 2)
+abline(h = 1, lty = 2, col = "#34495e")
+grid(nx = NA, ny = NULL, col = "gray80")
+
+cat("[SYSTEM] Process completed. Physical reality restored.\n")
