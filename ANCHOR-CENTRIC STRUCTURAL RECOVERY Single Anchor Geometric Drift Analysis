@@ -1,0 +1,102 @@
+# =================================================================
+# ITAGAKI-SYSTEM V55.0: ANCHOR-CENTRIC STRUCTURAL RECOVERY
+# Methodology: Single Anchor Geometric Drift Analysis
+# Logic: CAPTURING SAMPLE-SPECIFIC GEOMETRIC MISMATCH
+# Developed by: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License (https://opensource.org)
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2024). DOI: 10.3390/microorganisms12071484
+# Itagaki, T (2025). DOI: 10.3390/nu17233681
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.35015.25762
+# =================================================================
+
+set.seed(42)
+n_boot <- 1000
+min_abundance_threshold <- 0.00001 
+
+# 1. DATA PREPARATION
+ds_raw <- as.matrix(Dataset)
+valid_mask <- apply(ds_raw, 2, function(x) all(x >= min_abundance_threshold))
+if(sum(valid_mask) < 3) stop("Insufficient taxa for geometric analysis.")
+
+d_m <- ds_raw[, valid_mask, drop = FALSE]
+d_m <- sweep(d_m, 1, rowSums(d_m), "/") 
+n_samples <- nrow(d_m)
+n_taxa <- ncol(d_m)
+taxa_names <- colnames(d_m)
+
+# 2. IDENTIFY THE FIXED GEOMETRIC ANCHOR
+get_geometric_purity <- function(P) {
+  L <- log(P)
+  obs_v <- apply(L, 2, var)
+  vlr <- var(L)
+  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median) + 1e-18)
+  return(pi_s)
+}
+global_anchor_idx <- which.max(get_geometric_purity(d_m))
+global_anchor_name <- taxa_names[global_anchor_idx]
+
+# 3. BOOTSTRAP ENGINE: CAPTURING SAMPLE-WISE VARIANCE
+# We resample taxa to test the STABILITY of each sample relative to the fixed anchor
+boot_raw_matrix <- matrix(NA, nrow = n_boot, ncol = n_samples)
+
+cat(sprintf("Fixed Geometric Anchor: %s\n", global_anchor_name))
+cat("Executing 1,000 Bootstrap iterations (Structural Coherence Analysis)...\n")
+
+for(b in 1:n_boot) {
+  # Taxa-wise resampling captures how 'others' affect the anchor's position
+  # Ensure the global anchor is always included
+  other_taxa <- (1:n_taxa)[-global_anchor_idx]
+  idx <- c(global_anchor_idx, sample(other_taxa, replace = TRUE))
+  
+  boot_data <- d_m[, idx, drop = FALSE]
+  boot_data <- sweep(boot_data, 1, rowSums(boot_data), "/")
+  
+  # Logic: Use ONLY the anchor's ratio to recover the basis for THIS bootstrap
+  # No geometric mean normalization inside the loop to prevent CI flattening
+  sf_raw <- 1 / boot_data[, 1]
+  
+  boot_raw_matrix[b, ] <- sf_raw
+}
+
+# 4. LATE-NORMALIZATION (Relative to the global expected value of Sample 1)
+s1_ref_value <- mean(boot_raw_matrix[, 1])
+boot_final_matrix <- boot_raw_matrix / s1_ref_value
+
+# 5. STATISTICAL SUMMARIZATION
+sf_mean  <- apply(boot_final_matrix, 2, mean)
+sf_lower <- apply(boot_final_matrix, 2, quantile, probs = 0.025)
+sf_upper <- apply(boot_final_matrix, 2, quantile, probs = 0.975)
+
+# 6. PROFESSIONAL ANALYTICAL REPORT
+report_df <- data.frame(
+  SampleID = 1:n_samples,
+  Absolute_Ratio = round(sf_mean, 4),
+  CI_95_Lower = round(sf_lower, 4),
+  CI_95_Upper = round(sf_upper, 4),
+  CI_Width = round(sf_upper - sf_lower, 4)
+)
+
+cat("\n==========================================================\n")
+cat("   ITAGAKI V55.0: ANCHOR-CENTRIC RECOVERY REPORT\n")
+cat("==========================================================\n")
+print(report_df, row.names = FALSE)
+cat("----------------------------------------------------------\n")
+cat("RESULT: CI_Width reflects the sample-specific noise floor \n")
+cat("and structural instability relative to the anchor.\n")
+cat("==========================================================\n")
+
+# 7. VISUALIZATION
+dev.new(width=10, height=7)
+par(mar=c(5, 6, 4, 2))
+bp <- barplot(sf_mean, main=paste("Absolute Mass Recovery (Anchor:", global_anchor_name, ")"),
+              ylab="Absolute Mass Ratio (Rel. to Sample 1)", 
+              ylim=c(0, max(sf_upper)*1.3), col="#2c3e50", names.arg=1:n_samples)
+arrows(bp, sf_lower, bp, sf_upper, angle=90, code=3, length=0.05, lwd=1.5, col="#e74c3c")
+text(bp, sf_upper, labels=round(sf_mean, 2), pos=3, cex=0.8, font=2)
