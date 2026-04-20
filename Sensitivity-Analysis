@@ -23,12 +23,12 @@ calc_system_stability <- function(data_subset, lib_size) {
   # [A] Physical: Min IR (Invariance Ratio)
   obs_v <- apply(L, 2, var)
   theo_v <- 1 / (colMeans(P) * lib_size)
-  ir_vals <- obs_v / (theo_v + 1e-18)
+  ir_vals <- obs_v / (theo_v )
   ir_min <- min(ir_vals)
   
   # [B] Geometric: Max PI (Purity Index)
   vlr <- var(L)
-  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median) + 1e-18)
+  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median) )
   pi_max <- max(pi_s)
   
   # [C] Statistical: Max Win Count (Ohta's Asymmetry)
