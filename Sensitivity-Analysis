@@ -15,6 +15,10 @@
 # Itagaki, T (2026). DOI: 10.13140/RG.2.2.35015.25762
 # =================================================================
 
+d_m <- as.matrix(Dataset)
+eff_lib <- mean(rowSums(d_m))
+n_total <- nrow(d_m)
+
 # --- 1. CORE WRAPPER FOR STABILITY METRICS ---
 calc_system_stability <- function(data_subset, lib_size) {
   L <- log(data_subset)
