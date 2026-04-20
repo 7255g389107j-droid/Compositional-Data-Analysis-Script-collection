@@ -45,12 +45,12 @@ get_metrics <- function(P) {
   # Formula: Observed Var / (1 / (Proportion * Effective Depth))
   obs_v <- apply(L, 2, var)
   theo_v <- 1 / (colMeans(P) * eff_lib)
-  ir <- obs_v / (theo_v + 1e-18)
+  ir <- obs_v / (theo_v )
   
   # [B] Geometric: Purity Index (PI) via Variation Matrix (VLR)
   # Identifies the geometric center of the compositional simplex
   vlr <- var(L)
-  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median) + 1e-18)
+  pi_s <- 1 / (apply(outer(obs_v, obs_v, "+") - 2 * vlr, 1, median))
   
   # [C] Statistical: Ohta's Win Count (CV-Asymmetry)
   # Non-parametric winner for the most stable denominator
